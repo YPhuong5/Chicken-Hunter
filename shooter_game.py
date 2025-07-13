@@ -3,6 +3,7 @@
 from pygame import *
 from random import randint
 
+#Ehe
 #Font setting:
 font.init()
 font1 = font.Font(None, 80)
@@ -58,10 +59,20 @@ class Player(GameSprite):
             self.rect.y -= self.speed
         if keys[K_s] and self.rect.y < win_height - 80:
             self.rect.y += self.speed
+    def __init__(self, player_image, player_x, player_y, size_x, size_y, player_speed):
+        super().__init__(player_image, player_x, player_y, size_x, size_y, player_speed)
+        self.health = 100
+        self.max_health = 100
     
     def fire(self):
         bullet = Bullet('bullet.png', self.rect.centerx, self.rect.top, 15, 25, 10) 
         bullets.add(bullet)
+        
+    def take_damage(self, damage):
+        self.health -= damage
+        if self.health < 0:
+            self.health = 0 
+    
 class Bullet(GameSprite):
     def update(self):
         self.rect.y -= self.speed
@@ -90,6 +101,17 @@ for i in range(1,6):
 bullets = sprite.Group()
             
 player = Player('hunter.png', 370, 500, 100, 100, 5)
+
+def draw_health_bar():
+    bar_width = 20
+    bar_height = 200
+    bar_x = win_width - 40
+    bar_y = 50
+    
+    draw.ract(window,(100,100,100), (bar_x, bar_y, bar_width, bar_height))
+    
+    health_ratio = player.health / player.max_health
+    current_height = int(bar_height * health_ratio)
 
 finish = False
 run = True
