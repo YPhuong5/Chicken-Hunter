@@ -10,7 +10,7 @@ font1 = font.Font(None, 80)
 win = font1.render('You Win!', True, (255, 254, 252))
 lose = font1.render('You Lose!', True, (255, 254, 252))
 
-font2 = font.Font(None, 30)
+font2 = font.Font(None, 20)
 
 win_width = 800
 win_height = 600
@@ -25,6 +25,9 @@ score = 0
 missed = 0
 max_lost = 10
 display.set_caption("Shooter")
+
+img_heal = 'Heart.jpg'
+img_speed = 'booster.png'
 
 #Sound setting:
 mixer.init()
@@ -63,6 +66,8 @@ class Player(GameSprite):
         super().__init__(player_image, player_x, player_y, size_x, size_y, player_speed)
         self.health = 100
         self.max_health = 100
+        self.base_speed = player_speed
+        self.speed_boost_timer = 0
     
     def fire(self):
         bullet = Bullet('bullet.png', self.rect.centerx, self.rect.top, 15, 25, 10) 
@@ -88,10 +93,21 @@ class Enemy(GameSprite):
             self.rect.x = randint(80, win_width - 80)
             self.rect.y = 0 
             
+class Item(GameSprite):
+    def __init__(self, item_type, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.item_type = item_type
+        
+    def update(self):
+        self.rect.y += self.speed
+        if self.rect.y > win_height:
+            self.kill()
+                        
 
 
 enemies = sprite.Group()
 
+items = sprite.Group()
 for i in range(1,6):
     enemy = Enemy(img_enemy , randint(80, win_width - 80), -40, 80, 50, randint(1,4))
     enemies.add(enemy)
@@ -100,7 +116,7 @@ for i in range(1,6):
             
 bullets = sprite.Group()
             
-player = Player('hunter.png', 370, 500, 100, 100, 5)
+player = Player('hunter.png', 370, 500, 100, 100, 15)
 
 def draw_health_bar():
     bar_width = 20
@@ -108,10 +124,25 @@ def draw_health_bar():
     bar_x = win_width - 40
     bar_y = 50
     
-    draw.ract(window,(100,100,100), (bar_x, bar_y, bar_width, bar_height))
+    draw.rect(window,(100,100,100), (bar_x, bar_y, bar_width, bar_height))
     
     health_ratio = player.health / player.max_health
     current_height = int(bar_height * health_ratio)
+
+    #Draw health bar
+    if health_ratio > 0.5:
+        color = (50, 247, 47) #green
+    elif health_ratio > 0.25:
+        color = (255, 231, 74) #yellow
+    else:
+        color = (191, 17, 17) #red
+        
+    draw.rect(window, color, (bar_x, bar_y + bar_height - current_height, bar_width, current_height))
+    
+    draw.rect(window,(255, 255, 255), (bar_x, bar_y, bar_width, bar_height), 2)
+    
+    health_text = font2.render(f"{player.health}/{player.max_health}", True, (255, 255, 255))
+    window.blit(health_text, (bar_x - 10, bar_y + bar_height + 10 ))
 
 finish = False
 run = True
@@ -139,11 +170,24 @@ while run:
         enemies.draw(window)
         enemies.update()
         
+        items.draw(window)
+        items.update()
+        
+        if randint(1, 50) == 1:
+            item_type = randint(1,2)
+            if item_type == 1:
+                item = Item('heal', img_heal, randint(80, win_width - 80), -40, 40, 40, 3)
+            elif item_type == 2:
+                item = Item('speed', img_speed, randint(80, win_width - 80), -40, 40, 40, 3)
+            items.add(item)
+        
         text = font2.render('Score: ' + str(score), 1, (95, 209, 69))
         window.blit(text, (10,20))
         
         text_lose = font2.render('Missed: '+ str(missed), 1, (95, 209, 69))
         window.blit(text_lose, (10,50))
+        
+        draw_health_bar()
         
         collides = sprite.groupcollide(enemies, bullets, True, True)
         for c in collides:
@@ -151,7 +195,22 @@ while run:
             enemy = Enemy(img_enemy , randint(80, win_width - 80), -40, 80, 50, randint(1,6))
             enemies.add(enemy)
             
-        if sprite.spritecollide(player, enemies, False) or missed >= max_lost:
+        for item in sprite.spritecollide(player,items, True):
+            if item.item_type == 'heal':
+                player.health += 10
+                if player.health > player.max_health:
+                    player.health = player.max_health
+            elif item.item_type == 'speed':
+                player.speed = player.base_speed *2
+                player.speed_boost_timer = 200
+                
+            
+        if sprite.spritecollide(player, enemies, True):
+            player.take_damage(5)
+            enemy = Enemy(img_enemy , randint(80, win_width - 80), -40, 80, 50, randint(1,6))
+            enemies.add(enemy)
+            
+        if missed >= max_lost or player.health <= 0:
             finish = True
             window.blit(lose, (300,250))
         
@@ -159,6 +218,12 @@ while run:
             finish = True
             window.blit(win, (300,250))
             
-        
-        display.update()
-    clock.tick(FPS)
+        if player.speed_boost_timer > 0:
+            player.speed_boost_timer -= 1
+            if player.speed_boost_timer == 0:
+                player.speed = player.base_speed
+                
+            
+            
+    display.update()
+    time.delay(50)
