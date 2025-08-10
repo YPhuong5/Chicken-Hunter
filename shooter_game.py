@@ -18,17 +18,21 @@ game = True
 clock = time.Clock()
 FPS = 60
 background = transform.scale(image.load('backgroud2.jpg'), (win_width, win_height))
-img_enemy = 'chicken.png'
+
 window = display.set_mode((win_width, win_height))
-goal = 10
+goal = 100
 score = 0
 missed = 0
 max_lost = 10
 display.set_caption("Shooter")
 
-img_heal = 'Heart.jpg'
-img_speed = 'booster.png'
-
+img_heal = transform.scale(image.load('Heart.jpg'), (40, 40))
+img_speed = transform.scale(image.load('booster.png'), (40, 40))
+img_boss = transform.scale(image.load('boss.png'), (80, 50))
+img_enemy = transform.scale(image.load('chicken.png'), (80, 50))
+img_enemy2 = transform.scale(image.load('chickenlv2.png'), (80, 50))
+img_player = transform.scale(image.load('hunter.png'), (100, 100))
+img_bullet = transform.scale(image.load('bullet.png'), (15, 25))
 #Sound setting:
 mixer.init()
 mixer.music.load('space.ogg')
@@ -37,11 +41,21 @@ mixer.music.play()
 
 shooting_sound = mixer.Sound('fire.ogg')
 
+#ENEMY SPAWN SETTING:
+spawn_counter = 0
+spawn_delay = randint(30,60)
+MAX_ENEMIES = 6
+
+#Chicken progression system:
+chicken_level = 1
+chicken_killed = 0
+CHICKEN_PER_LEVEL = 3
+
 class GameSprite(sprite.Sprite):
     def __init__(self, player_image, player_x, player_y, size_x, size_y, player_speed):
         super().__init__()
  
-        self.image = transform.scale(image.load(player_image), (size_x, size_y))
+        self.image = player_image
         self.speed = player_speed
 
         self.rect = self.image.get_rect()
@@ -70,7 +84,7 @@ class Player(GameSprite):
         self.speed_boost_timer = 0
     
     def fire(self):
-        bullet = Bullet('bullet.png', self.rect.centerx, self.rect.top, 15, 25, 10) 
+        bullet = Bullet(img_bullet, self.rect.centerx, self.rect.top, 15, 25, 10) 
         bullets.add(bullet)
         
     def take_damage(self, damage):
@@ -85,13 +99,23 @@ class Bullet(GameSprite):
             self.kill()
             
 class Enemy(GameSprite):
+    def __init__(self, player_image, player_x, player_y, size_x, size_y, player_speed, chicken_type = 1):
+        super().__init__(player_image, player_x, player_y, size_x, size_y, player_speed)
+        self.chicken_type = chicken_type
+        self.health = chicken_type
+    
     def update(self):
         self.rect.y += self.speed
         global missed
         if self.rect.y > win_height:
             missed += 1
             self.rect.x = randint(80, win_width - 80)
-            self.rect.y = 0 
+            self.rect.y = 0
+            
+            
+    def take_damage(self):
+        self.health -= 1
+        return self.health <= 0
             
 class Item(GameSprite):
     def __init__(self, item_type, *args, **kwargs):
@@ -108,15 +132,16 @@ class Item(GameSprite):
 enemies = sprite.Group()
 
 items = sprite.Group()
-for i in range(1,6):
+'''for i in range(1,6):
     enemy = Enemy(img_enemy , randint(80, win_width - 80), -40, 80, 50, randint(1,4))
-    enemies.add(enemy)
+    enemies.add(enemy)'''
+    
     
     
             
 bullets = sprite.Group()
             
-player = Player('hunter.png', 370, 500, 100, 100, 15)
+player = Player(img_player, 370, 500, 100, 100, 15)
 
 def draw_health_bar():
     bar_width = 20
@@ -147,6 +172,8 @@ def draw_health_bar():
 finish = False
 run = True
 
+boss_appear = False
+
 while run:
     for e in event.get():
         if e.type == QUIT:
@@ -166,12 +193,45 @@ while run:
         
         bullets.draw(window)
         bullets.update()
-
-        enemies.draw(window)
-        enemies.update()
+        print(chicken_level, chicken_killed)
         
         items.draw(window)
         items.update()
+        
+        spawn_counter += 1
+        if spawn_counter >= spawn_delay and len(enemies) < MAX_ENEMIES:
+            if chicken_killed >= CHICKEN_PER_LEVEL and chicken_level < 4:
+                chicken_level += 1
+                chicken_killed = 0
+                print(chicken_level)
+                
+            if chicken_level == 1:
+                chicken_type = 1
+                chicken_img = img_enemy
+                chicken_speed = randint(1,3)
+            elif chicken_level == 2:
+                chicken_type = 2
+                chicken_img = img_enemy2
+                chicken_speed = randint(2,5)
+            elif chicken_level == 3:
+                chicken_boss = Enemy(img_boss, 300, -50, 80, 50, 5, 50)
+                chicken_boss.health = 100
+                boss_appear = True
+                
+                
+                
+        
+            enemy = Enemy(chicken_img, randint(40, win_width - 50), -30, 80, 50, chicken_speed, chicken_type)
+            enemies.add(enemy)
+            spawn_counter = 0
+            spawn_delay = randint(30,60)
+        
+        enemies.draw(window)
+        enemies.update()
+        
+        for enemy in enemies:
+            if enemy.rect.bottom >= win_height - 40:
+                enemies.remove(enemy)
         
         if randint(1, 50) == 1:
             item_type = randint(1,2)
@@ -189,12 +249,17 @@ while run:
         
         draw_health_bar()
         
-        collides = sprite.groupcollide(enemies, bullets, True, True)
-        for c in collides:
-            score += 1
-            enemy = Enemy(img_enemy , randint(80, win_width - 80), -40, 80, 50, randint(1,6))
-            enemies.add(enemy)
-            
+        for bullet in bullets:
+            for enemy in enemies:
+                if sprite.collide_rect(bullet, enemy):
+                    bullets.remove(bullet)
+                    enemy.health -= 1
+                    if enemy.health <= 0:
+                        enemies.remove(enemy)
+                        score += enemy.chicken_type
+                        chicken_killed += 1
+                    break
+                    
         for item in sprite.spritecollide(player,items, True):
             if item.item_type == 'heal':
                 player.health += 10
@@ -204,21 +269,29 @@ while run:
                 player.speed = player.base_speed *2
                 player.speed_boost_timer = 200
                 
-            
-        if sprite.spritecollide(player, enemies, True):
-            player.take_damage(5)
+        for enemy in sprite.spritecollide(player,enemies, True):
+            player.take_damage(enemy.chicken_type *5)
             enemy = Enemy(img_enemy , randint(80, win_width - 80), -40, 80, 50, randint(1,6))
             enemies.add(enemy)
-            
-        if missed >= max_lost or player.health <= 0:
-            finish = True
-            window.blit(lose, (300,250))
         
-        if score >= goal:
-            finish = True
-            window.blit(win, (300,250))
-            
-        if player.speed_boost_timer > 0:
+        if boss_appear == False:
+            if player.health <= 0:
+                finish = True
+                window.blit(lose, (300,250))
+        else:
+            chicken_boss.update()
+            if sprite.collide_rect(player, chicken_boss):
+                finish = True
+                window.blit(lose, (300, 250))
+            if chicken_boss.health == 0:
+                finish = True
+                window.blit(win, (300, 250))   
+            if sprite.collide_rect(bullet, chicken_boss):
+                    bullets.remove(bullet)
+                    chicken_boss.health -= 1
+                    print(chicken_boss.health)
+                    
+        if player.speed_boost_timer > 0: 
             player.speed_boost_timer -= 1
             if player.speed_boost_timer == 0:
                 player.speed = player.base_speed
