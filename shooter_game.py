@@ -3,7 +3,7 @@
 from pygame import *
 from random import randint
 
-#Ehe
+#Ehe=3
 #Font setting:
 font.init()
 font1 = font.Font(None, 80)
@@ -28,7 +28,7 @@ display.set_caption("Shooter")
 
 img_heal = transform.scale(image.load('Heart.jpg'), (40, 40))
 img_speed = transform.scale(image.load('booster.png'), (40, 40))
-img_boss = transform.scale(image.load('boss.png'), (80, 50))
+img_boss = transform.scale(image.load('boss.png'), (150, 150))
 img_enemy = transform.scale(image.load('chicken.png'), (80, 50))
 img_enemy2 = transform.scale(image.load('chickenlv2.png'), (80, 50))
 img_player = transform.scale(image.load('hunter.png'), (100, 100))
@@ -50,6 +50,8 @@ MAX_ENEMIES = 6
 chicken_level = 1
 chicken_killed = 0
 CHICKEN_PER_LEVEL = 3
+
+
 
 class GameSprite(sprite.Sprite):
     def __init__(self, player_image, player_x, player_y, size_x, size_y, player_speed):
@@ -169,10 +171,41 @@ def draw_health_bar():
     health_text = font2.render(f"{player.health}/{player.max_health}", True, (255, 255, 255))
     window.blit(health_text, (bar_x - 10, bar_y + bar_height + 10 ))
 
+def draw_boss_health_bar():
+    if not boss_appear or not chicken_boss:
+        return
+    
+    bar_width = 400
+    bar_height = 30
+    bar_x = (win_width - bar_width) // 2
+    bar_y = 20
+    
+    draw.rect(window, (100, 100, 100), (bar_x, bar_y, bar_width, bar_height))
+    
+    health_ratio = chicken_boss.health / 50
+    current_width = int(bar_width * health_ratio)
+    
+    if health_ratio > 0.5:
+        color = (50, 247, 47) #green
+    elif health_ratio > 0.25:
+        color = (255, 231, 74) #yellow
+    else:
+        color = (191, 17, 17) #red
+    
+    draw.rect(window, color, (bar_x, bar_y, current_width, bar_height))
+    
+    draw.rect(window, (255, 255, 255), (bar_x, bar_y, bar_width, bar_height), 2)
+    
+    boss_text = font2.render(f"BOSS HP: {chicken_boss.health}/50", True, (255, 255, 255))
+    text_x = bar_x + (bar_width - boss_text.get_width()) // 2
+    window.blit(boss_text, (text_x, bar_y + bar_height + 5))
+
+
 finish = False
 run = True
 
 boss_appear = False
+chicken_boss = None
 
 while run:
     for e in event.get():
@@ -205,33 +238,36 @@ while run:
                 chicken_killed = 0
                 print(chicken_level)
                 
-            if chicken_level == 1:
-                chicken_type = 1
-                chicken_img = img_enemy
-                chicken_speed = randint(1,3)
-            elif chicken_level == 2:
-                chicken_type = 2
-                chicken_img = img_enemy2
-                chicken_speed = randint(2,5)
-            elif chicken_level == 3:
-                chicken_boss = Enemy(img_boss, 300, -50, 80, 50, 5, 50)
-                chicken_boss.health = 100
-                boss_appear = True
-                
-                
-                
+                if chicken_level == 3:
+                    enemies.empty()
+                    boss_appear = True
+                    chicken_boss = Enemy(img_boss, 300, -50, 150, 150, 2, 50)
+                    chicken_boss.health = 50
+                    print("BOSS APPREARED!")
+                    continue
+            
+            if chicken_level < 3:
+                if chicken_level == 1:
+                    chicken_type = 1
+                    chicken_img = img_enemy
+                    chicken_speed = randint(1,3)
+                elif chicken_level == 2:
+                    chicken_type = 2
+                    chicken_img = img_enemy2
+                    chicken_speed = randint(2,5)
+            
+                enemy = Enemy(chicken_img, randint(40, win_width - 50), -30, 80, 50, chicken_speed, chicken_type)
+                enemies.add(enemy)
+                spawn_counter = 0
+                spawn_delay = randint(30,60)
         
-            enemy = Enemy(chicken_img, randint(40, win_width - 50), -30, 80, 50, chicken_speed, chicken_type)
-            enemies.add(enemy)
-            spawn_counter = 0
-            spawn_delay = randint(30,60)
-        
-        enemies.draw(window)
-        enemies.update()
-        
-        for enemy in enemies:
-            if enemy.rect.bottom >= win_height - 40:
-                enemies.remove(enemy)
+        if chicken_level < 3:
+            enemies.draw(window)
+            enemies.update()
+            
+            for enemy in enemies:
+                if enemy.rect.bottom >= win_height - 40:
+                    enemies.remove(enemy)
         
         if randint(1, 50) == 1:
             item_type = randint(1,2)
@@ -249,15 +285,27 @@ while run:
         
         draw_health_bar()
         
-        for bullet in bullets:
-            for enemy in enemies:
-                if sprite.collide_rect(bullet, enemy):
+        if boss_appear:
+            draw_boss_health_bar()
+        
+        if chicken_level < 3:
+            for bullet in bullets:
+                for enemy in enemies:
+                    if sprite.collide_rect(bullet, enemy):
+                        bullets.remove(bullet)
+                        enemy.health -= 1
+                        if enemy.health <= 0:
+                            enemies.remove(enemy)
+                            score += enemy.chicken_type
+                            chicken_killed += 1
+                        break
+                    
+        if boss_appear and chicken_boss:
+            for bullet in bullets:
+                if sprite.collide_rect(bullet, chicken_boss):
                     bullets.remove(bullet)
-                    enemy.health -= 1
-                    if enemy.health <= 0:
-                        enemies.remove(enemy)
-                        score += enemy.chicken_type
-                        chicken_killed += 1
+                    chicken_boss.health -= 1
+                    print(f"Boss HP: {chicken_boss.health}")
                     break
                     
         for item in sprite.spritecollide(player,items, True):
@@ -268,35 +316,40 @@ while run:
             elif item.item_type == 'speed':
                 player.speed = player.base_speed *2
                 player.speed_boost_timer = 200
+        if chicken_level < 3:        
+            for enemy in sprite.spritecollide(player,enemies, True):
+                player.take_damage(enemy.chicken_type *5)
+                enemy = Enemy(img_enemy , randint(80, win_width - 80), -40, 80, 50, randint(1,6))
+                enemies.add(enemy)
                 
-        for enemy in sprite.spritecollide(player,enemies, True):
-            player.take_damage(enemy.chicken_type *5)
-            enemy = Enemy(img_enemy , randint(80, win_width - 80), -40, 80, 50, randint(1,6))
-            enemies.add(enemy)
+        if boss_appear and chicken_boss:
+            if sprite.collide_rect(player, chicken_boss):
+                finish = True
+                window.blit(lose, (300, 250))
         
         if boss_appear == False:
             if player.health <= 0:
                 finish = True
                 window.blit(lose, (300,250))
         else:
-            chicken_boss.update()
-            if sprite.collide_rect(player, chicken_boss):
-                finish = True
-                window.blit(lose, (300, 250))
-            if chicken_boss.health == 0:
-                finish = True
-                window.blit(win, (300, 250))   
-            if sprite.collide_rect(bullet, chicken_boss):
-                    bullets.remove(bullet)
-                    chicken_boss.health -= 1
-                    print(chicken_boss.health)
+            if chicken_boss:
+                chicken_boss.reset()
+                chicken_boss.update()
+                
+                if chicken_boss.health <= 0:
+                    finish = True
+                    window.blit(win, (300, 250))
+                    
+                if player.health <= 0:
+                    finish = True
+                    window.blit(lose, 300, 250)
                     
         if player.speed_boost_timer > 0: 
             player.speed_boost_timer -= 1
             if player.speed_boost_timer == 0:
                 player.speed = player.base_speed
                 
-            
+        
             
     display.update()
     time.delay(50)
